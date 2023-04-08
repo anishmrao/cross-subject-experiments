@@ -50,10 +50,12 @@ def parseBci42aFile(dataPath, labelPath, epochWindow = [0,4], chans = list(range
     fs = 250
     offset = 2
     
+    print("Datapath:", dataPath, "Labelpath:", labelPath)
     #load the gdf file using MNE
     raw_gdf = mne.io.read_raw_gdf(dataPath, stim_channel="auto")
     raw_gdf.load_data()
     gdf_event_labels = mne.events_from_annotations(raw_gdf)[1]
+    print("Event Labels:", gdf_event_labels)
     eventCode = [gdf_event_labels[x] for x in eventCode]
 
     gdf_events = mne.events_from_annotations(raw_gdf)[0][:,[0,2]].tolist()
@@ -65,7 +67,9 @@ def parseBci42aFile(dataPath, labelPath, epochWindow = [0,4], chans = list(range
     
     #Epoch the data
     events = [event for event in gdf_events if event[1] in eventCode]
+    print("Events:", events)
     y = np.array([i[1] for i in events])
+    print("y:", y)
     epochInterval = np.array(range(epochWindow[0]*fs, epochWindow[1]*fs))+offset*fs
     x = np.stack([eeg[:, epochInterval+event[0] ] for event in events], axis = 2)
     
@@ -81,6 +85,7 @@ def parseBci42aFile(dataPath, labelPath, epochWindow = [0,4], chans = list(range
     y = y -1
     
     data = {'x': x, 'y': y, 'c': np.array(raw_gdf.info['ch_names'])[chans].tolist(), 's': fs}
+    print("X:", data['x'].shape, "Y:", data['y'])
     return data
 
 
@@ -128,6 +133,53 @@ def parseBci42aDataset(datasetPath, savePath,
                 os.path.join(datasetPath, sub+'.mat'), 
                 epochWindow = epochWindow, chans = chans)
             savemat(os.path.join(savePath, subL[iSubs]+str(iSub+1).zfill(3)+'.mat'), data)
+
+
+def parsePhysionetDataset(datasetPath, savePath, 
+                       epochWindow = [0,4], chans = list(range(22)), verbos = False):
+    '''
+    Parse the BCI comp. IV-2a data in a MATLAB formate that will be used in the next analysis
+
+    Parameters
+    ----------
+    datasetPath : str
+        Path to the BCI IV2a original dataset in gdf formate.
+    savePath : str
+        Path on where to save the epoched eeg data in a mat format.
+    epochWindow : list, optional
+        time segment to extract in seconds. The default is [0,4].
+    chans  : list : channels to select from the data.
+
+    Returns
+    -------
+    None. 
+    The dataset will be saved at savePath.
+
+    '''
+    subjects=['A01T','A02T','A03T','A04T','A05T','A06T','A07T','A08T','A09T']
+    test_subjects=['A01E','A02E','A03E','A04E','A05E','A06E','A07E','A08E','A09E']
+    subAll = [subjects, test_subjects]
+    subL = ['s', 'se'] # s: session 1, se: session 2 (session evaluation)
+    
+    print('Extracting the data into mat format: ')
+    if not os.path.exists(savePath):
+        os.makedirs(savePath)
+    print('Processed data be saved in folder : ' + savePath)
+    
+    for iSubs, subs in enumerate(subAll):
+        for iSub, sub in enumerate(subs):
+            if not os.path.exists(os.path.join(datasetPath, sub+'.mat')):
+                raise ValueError('The BCI-IV-2a original dataset doesn\'t exist at path: ' + 
+                                  os.path.join(datasetPath, sub+'.mat') + 
+                                  ' Please download and copy the extracted dataset at the above path '+
+                                  ' More details about how to download this data can be found in the Instructions.txt file')
+            
+            print('Processing subject No.: ' + subL[iSubs]+str(iSub+1).zfill(3))
+            data = parseBci42aFile(os.path.join(datasetPath, sub+'.gdf'), 
+                os.path.join(datasetPath, sub+'.mat'), 
+                epochWindow = epochWindow, chans = chans)
+            savemat(os.path.join(savePath, subL[iSubs]+str(iSub+1).zfill(3)+'.mat'), data)
+
 
 def fetchAndParseKoreaFile(dataPath, url = None, epochWindow = [0,4],
                            chans = [7,32, 8, 9, 33, 10, 34, 12, 35, 13, 36, 14, 37, 17, 38, 18, 39, 19, 40, 20],

@@ -165,7 +165,7 @@ class baseModel():
 
         # Lets run the experiment
         expNo = 0
-        original_net_dict = copy.deepcopy(self.net.state_dict())
+        # original_net_dict = copy.deepcopy(self.net.state_dict())
 
         # set the details
         expDetail = {'expNo': expNo, 'expParam': {'optimFn': optimFns,
@@ -173,7 +173,7 @@ class baseModel():
                                                   'stopCondi': stopCondi}}
 
         # Reset the network to its initial form.
-        self.net.load_state_dict(original_net_dict)
+        # self.net.load_state_dict(original_net_dict)
 
         # Run the training and get the losses.
         trainResults = self._trainOE(trainData, valData, lossFn,
@@ -507,6 +507,62 @@ class baseModel():
                 actual.extend(d['label'].tolist())
 
         return predicted, actual, torch.tensor(loss).item()/totalCount
+    
+    def predict_proba(self, data, sampler = None, lossFn = None):
+        '''
+        Predict the class of the input data
+
+        Parameters
+        ----------
+        data : eegDataset
+            dataset of type eegDataset.
+        sampler : function handle of type torch.utils.data.sampler, optional
+            sampler is used if you want to specify any particular data sampling in
+            the data loader. The default is None.
+        lossFn : function handle of type torch.nn, optional
+            lossFn is not None then function returns the loss. The default is None.
+
+        Returns
+        -------
+        predicted : list
+            List of predicted labels.
+        actual : list
+            List of actual labels.
+        loss
+            average loss.
+
+        '''
+
+        predicted = []
+        predicted_probs = []
+        actual = []
+        loss = 0
+        batch_size = self.batchSize
+        totalCount = 0
+        # set the network in the eval mode
+        self.net.eval()
+
+        # initiate the dataloader.
+        dataLoader = DataLoader(data, batch_size= batch_size, shuffle= False)
+
+        # with no gradient tracking
+        with torch.no_grad():
+            # iterate over all the data
+            for d in dataLoader:
+                pred_prob = self.net(d['data'].unsqueeze(1).to(self.device))
+                totalCount += d['data'].shape[0]
+
+                if lossFn is not None:
+                    # calculate loss
+                    loss += lossFn(pred_prob, d['label'].type(torch.LongTensor).to(self.device)).data
+
+                # Convert the output of soft-max to class label
+                _, preds = torch.max(pred_prob, 1)
+                predicted_probs.append(pred_prob.data.tolist())
+                predicted.extend(preds.data.tolist())
+                actual.extend(d['label'].tolist())
+
+        return predicted, actual, torch.tensor(loss).item()/totalCount, predicted_probs
 
     def calculateResults(self, yPredicted, yActual, classes = None):
         '''
@@ -676,4 +732,31 @@ class baseModel():
 
         return out
 
+    def test(self, testData, sampler=None, lossFn='NLLLoss', classes=None):
+        if testData is not None:
+            lossFn = self._findLossFn(lossFn)(reduction='sum')
+            
+            if classes is None:
+                labels = [l[2] for l in testData.labels]
+                classes = list(set(labels))
+
+            pred, act, l = self.predict(testData, sampler=sampler, lossFn=lossFn)
+            testResults = self.calculateResults(pred, act, classes=classes)
+            testResults['loss'] = l
+            return testResults
+        return None
+    
+    def test_preds(self, testData, sampler=None, lossFn='NLLLoss', classes=None):
+        if testData is not None:
+            lossFn = self._findLossFn(lossFn)(reduction='sum')
+            
+            if classes is None:
+                labels = [l[2] for l in testData.labels]
+                classes = list(set(labels))
+
+            pred, act, l, pred_prob = self.predict_proba(testData, sampler=sampler, lossFn=lossFn)
+            testResults = self.calculateResults(pred, act, classes=classes)
+            testResults['loss'] = l
+            return testResults, pred, act, pred_prob
+        return None
 
