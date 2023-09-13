@@ -1,4 +1,7 @@
-# FBCNet
+# Cross-subject experiments with FBCNet and EEGNet
+
+**This fork of FBCNet has been modified to facilitate cross-subject Motor Imagery Decoding experiments.**
+
 ## FBCNet: An Efficient Multi-view Convolutional Neural Network for Brain-Computer Interface
 
 This is the PyTorch implementation of the FBCNet architecture for EEG-BCI classification. 
